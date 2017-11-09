@@ -9,7 +9,7 @@ module.exports = function makeRouterWithSockets (io) {
   // a reusable function
   function respondWithAllTweets (req, res, next){
     //var allTheTweets = tweetBank.list();
-    pgClient.query ('SELECT content, name FROM tweets JOIN users ON tweets.user_id=users.id', (err, result) => {
+    pgClient.query ('SELECT content, name, tweets.id FROM tweets JOIN users ON tweets.user_id=users.id', (err, result) => {
       if (err) return next (err);
       res.render('index', {
         title: 'Twitter.js',
@@ -89,17 +89,12 @@ module.exports = function makeRouterWithSockets (io) {
     });  
   });
 
-  function newTweet (err, result) {
-    if (err) return next (err);
-    var newTweet = {name: req.body.name, content: req.body.content, id: result.rows[0].id};
-    io.sockets.emit('new_tweet', newTweet);
-    res.redirect('/');
-  }
-
   function runSQL (query, params, callBackFunc) {
     console.log("query: "+query);
     pgClient.query (query, params, callBackFunc);
   }
+
+
   // // replaced this hard-coded route with general static routing in app.js
   // router.get('/stylesheets/style.css', function(req, res, next){
   //   res.sendFile('/stylesheets/style.css', { root: __dirname + '/../public/' });
