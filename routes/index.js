@@ -56,19 +56,50 @@ module.exports = function makeRouterWithSockets (io) {
 
   // create a new tweet
   router.post('/tweets', function(req, res, next){
-    let query = `INSERT INTO tweets (user_id, content) VALUES ( (SELECT id FROM users WHERE name='${req.body.name}'), ${req.body.content}) RETURNING id`;
-    //var newTweet = tweetBank.add(req.body.name, req.body.content);
-    var ret = pgClient.query(query, (err, result) => {
+    let queryForUser = `SELECT id FROM users where name='${req.body.name}'`;
+    let queryInsertTweet = `INSERT INTO tweets (user_id, content) VALUES ( $1, '${req.body.content}') RETURNING id`;
+    let userId = null;
+    pgClient.query(queryForUser, (err, result) => {
       if (err) return next (err);
-      //{ name: name, content: content, id: data.length }
-      console.log(" RESULT FROM RETURNING QUERY ");
-      console.log(result.rows);
-      var newTweet = {name: req.body.name, content: req.body.content, id: result.rows[0].id};
-      io.sockets.emit('new_tweet', newTweet);
-      res.redirect('/');
+      if (result.rows.length) {
+        console.log( " user id exists ", result.rows[0]);
+        userId = result.rows[0].id;
+        console.log('actual userId value: ', userId);
+        //let queryInsertUser = `INSERT INTO tweets (user_id, content) VALUES ( ${userId}, '${req.body.content}') RETURNING id`;
+        runSQL (queryInsertTweet, [userId], (err, result) => {
+          if (err) return next (err);
+          var newTweet = {name: req.body.name, content: req.body.content, id: result.rows[0].id};
+          io.sockets.emit('new_tweet', newTweet);
+          res.redirect('/')});
+
+      } else {
+        let insertUser = `INSERT INTO users (name) VALUES ('${req.body.name}') RETURNING id`;
+        pgClient.query(insertUser, (err, result) => {
+          if (err) return next (err);
+          userId = result.rows[0].id;
+          console.log( " user id does not exist ", result.rows[0]);
+          //let queryInsertUser = `INSERT INTO tweets (user_id, content) VALUES ( ${userId}, '${req.body.content}') RETURNING id`;
+          runSQL (queryInsertTweet, [userId], (err, result) => {
+            if (err) return next (err);
+            var newTweet = {name: req.body.name, content: req.body.content, id: result.rows[0].id};
+            io.sockets.emit('new_tweet', newTweet);
+            res.redirect('/')});
+        });
+      }
     });  
   });
 
+  function newTweet (err, result) {
+    if (err) return next (err);
+    var newTweet = {name: req.body.name, content: req.body.content, id: result.rows[0].id};
+    io.sockets.emit('new_tweet', newTweet);
+    res.redirect('/');
+  }
+
+  function runSQL (query, params, callBackFunc) {
+    console.log("query: "+query);
+    pgClient.query (query, params, callBackFunc);
+  }
   // // replaced this hard-coded route with general static routing in app.js
   // router.get('/stylesheets/style.css', function(req, res, next){
   //   res.sendFile('/stylesheets/style.css', { root: __dirname + '/../public/' });
